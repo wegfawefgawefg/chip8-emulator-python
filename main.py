@@ -41,6 +41,9 @@ from pygame.locals import (
 import logging
 logging.basicConfig(level=logging.NOTSET)
 LOG = logging.getLogger(":")
+INSTRUCTION_LOGGING = False
+CYCLE_LOGGING = True
+CHECKING_KEYPRESS_LOGGING = True
 # LOG.setLevel(logging.DEBUG)
 # LOG.setLevel(logging.ERROR)
 
@@ -195,22 +198,32 @@ class Chip8Emulator:
             stack_dump.append(fbhs(ptr))
         stack_dump = ", ".join(stack_dump)
             
-        LOG.info(f"======== stack_height: {len(self.stack)}")
-        LOG.info(f"======== stack: [{stack_dump}]")
+        LOG.info(f"======== stack_height: {len(self.stack)}") if CYCLE_LOGGING else None 
+        LOG.info(f"======== stack: [{stack_dump}]") if CYCLE_LOGGING else None 
 
     def print_registers(self):
         reg_dump = []
         for ptr in self.registers:
             reg_dump.append(fbhs(ptr))
         reg_dump = ", ".join(reg_dump)
-        LOG.info(f"======== registers: [{reg_dump}]")
+        LOG.info(f"======== registers: [{reg_dump}]") if CYCLE_LOGGING else None 
         
-
+    def print_keys(self):
+        key_dump = [" "]
+        for y in range(0,4):
+            line = []
+            for x in range(4):
+                i = (y*4) + x
+                k = self.key_inputs[i]
+                line.append(f"{k}")
+            key_dump.append(", ".join(line))
+        key_dump = "\t\t\n ".join(key_dump)
+        LOG.info(f"======== keys: [{key_dump}]") if CYCLE_LOGGING else None 
 
     def cycle(self):
-        LOG.info("========================= cycle ================================")
+        LOG.info("========================= cycle ================================") if CYCLE_LOGGING else None 
         if self.pc >= Chip8Emulator.MEMORY_SIZE:
-            LOG.error("program counter exceeded program memory")
+            LOG.error("program counter exceeded program memory") if CYCLE_LOGGING else None 
             quit()
 
 
@@ -218,10 +231,11 @@ class Chip8Emulator:
         self.inc_pc()
 
         if self.print_loaded_ops:
-            LOG.info(f"======== pc: {fbhs(self.pc)}")
-            self.print_registers()
-            self.print_stack()
-            LOG.info(f"======== current op: {fbhs(self.op)}")
+            LOG.info(f"======== pc: {fbhs(self.pc)}") if CYCLE_LOGGING else None 
+            self.print_registers() if CYCLE_LOGGING else None 
+            self.print_stack() if CYCLE_LOGGING else None 
+            self.print_keys() if CYCLE_LOGGING else None 
+            LOG.info(f"======== current op: {fbhs(self.op)}") if CYCLE_LOGGING else None 
 
         op_type = self.op & 0xf000
         self.process(op_type)
@@ -232,7 +246,7 @@ class Chip8Emulator:
             self.tone.play()
 
     def get_first_pressed_key(self):
-        LOG.info("get_first_pressed_key")
+        LOG.info("get_first_pressed_key") if INSTRUCTION_LOGGING else None 
         for i in range(16):
             if self.key_inputs[i] == 1:
                 return i
@@ -252,13 +266,13 @@ class Chip8Emulator:
             LOG.error("invalid chip8 key")
             return
         if event.type == pygame.KEYUP:
-            LOG.info(f"key released: {event.key}")
-            key_mem_address = self.key_map[event.key]
-            self.key_inputs[key_mem_address] = 1
-        elif event.type == pygame.KEYDOWN:
-            LOG.info(f"key released: {event.key}")
+            LOG.info(f"key released: {pygame.key.name(event.key)}")
             key_mem_address = self.key_map[event.key]
             self.key_inputs[key_mem_address] = 0
+        elif event.type == pygame.KEYDOWN:
+            LOG.info(f"key pressed: {pygame.key.name(event.key)}")
+            key_mem_address = self.key_map[event.key]
+            self.key_inputs[key_mem_address] = 1
 
     ################################################################################
     ###############                 INSTRUCTION SET                 ################
@@ -307,121 +321,124 @@ class Chip8Emulator:
         }
     
     def _ld_vx_delay_tmr(self):
-        LOG.info("_ld_vx_delay_tmr")
+        LOG.info("_ld_vx_delay_tmr") if INSTRUCTION_LOGGING else None 
         self.registers[self.vx] = self.delay_timer
 
     def _skip_eq_vx_nn(self):
-        LOG.info("_skip_eq_vx_nn")
+        LOG.info("_skip_eq_vx_nn") if INSTRUCTION_LOGGING else None 
         if self.registers[self.vx] == self.c2b:
-            LOG.info(f"    skipping bc {self.registers[self.vx]} == {self.c2b}")
+            LOG.info(f"    skipping bc {self.registers[self.vx]} == {self.c2b}") if INSTRUCTION_LOGGING else None 
             self.inc_pc()
 
     def _skip_neq_vx_nn(self):
-        LOG.info("_skip_neq_vx_nn")
+        LOG.info("_skip_neq_vx_nn") if INSTRUCTION_LOGGING else None 
         if self.registers[self.vx] != self.c2b:
-
             self.inc_pc()
 
     def _skip_eq_vx_vy(self):
-        LOG.info("_skip_eq_vx_vy")
+        LOG.info("_skip_eq_vx_vy") if INSTRUCTION_LOGGING else None 
         if self.registers[self.vx] == self.registers[self.vy]:
             self.inc_pc() 
 
     def _ld_vx_nn(self):
-        LOG.info("_ld_vx_nn")
+        LOG.info("_ld_vx_nn") if INSTRUCTION_LOGGING else None 
         self.registers[self.vx] = self.c2b
-        LOG.info(f"    loads {fbhs(self.c2b)} into {fbhs(self.vx)}'th register")
+        LOG.info(f"    loads {fbhs(self.c2b)} into {fbhs(self.vx)}'th register") if INSTRUCTION_LOGGING else None 
 
     def _ld_add_vx_nn(self):
-        LOG.info("_ld_add_vx_nn")
+        LOG.info("_ld_add_vx_nn") if INSTRUCTION_LOGGING else None 
         self.registers[self.vx] += self.c2b
 
     def _8ZZZ(self):
-        LOG.info("_8ZZZ")
+        LOG.info("_8ZZZ") if INSTRUCTION_LOGGING else None 
         sub_op = (self.op & 0xF00F) + 0x001
         self.process(sub_op)
 
     def _ld_vx_vy(self):
-        LOG.info("_ld_vx_vy")
+        LOG.info("_ld_vx_vy") if INSTRUCTION_LOGGING else None 
         self.registers[self.vx] = self.registers[self.vy]
         self.registers[self.vx] &= 0x00FF
 
     def _ldor_vx_vy(self):
-        LOG.info("_ldor_vx_vy")
+        LOG.info("_ldor_vx_vy") if INSTRUCTION_LOGGING else None 
         self.registers[self.vx] |= self.registers[self.vy]
         self.registers[self.vx] &= 0x00FF
 
     def _ldand_vx_vy(self):
-        LOG.info("_ldand_vx_vy")
+        LOG.info("_ldand_vx_vy") if INSTRUCTION_LOGGING else None 
         self.registers[self.vx] &= self.registers[self.vy]
         self.registers[self.vx] &= 0x00FF
 
     def _ldxor_vx_vy(self):
-        LOG.info("_ldxor_vx_vy")
+        LOG.info("_ldxor_vx_vy") if INSTRUCTION_LOGGING else None 
         self.registers[self.vx] ^= self.registers[self.vy]
         self.registers[self.vx] &= 0x00FF
 
     def _ldcadd_vx_vy(self):
-        LOG.info("_ldcadd_vx_vy")
+        LOG.info("_ldcadd_vx_vy") if INSTRUCTION_LOGGING else None 
         rsum = self.registers[self.vx] + self.registers[self.vy]
         self.registers[0x000F] = 1 if rsum > 0x00ff else 0 #   overflow, set carry
         self.registers[self.vx] = rsum
         self.registers[self.vx] &= 0x00FF
 
     def _bsub_vx_vy(self):
-        LOG.info("_bsub_vx_vy")
+        LOG.info("_bsub_vx_vy") if INSTRUCTION_LOGGING else None 
         self.registers[0x000F] = 0 if self.registers[self.vy] > self.registers[self.vx] else 1  #   overflow, set borrow
         self.registers[self.vx] -= self.registers[self.vy]
         self.registers[self.vx] &= 0x00FF
 
     def _rshift_vx(self):
-        LOG.info("_rshift_vx")
+        LOG.info("_rshift_vx") if INSTRUCTION_LOGGING else None 
         self.registers[0x000F] = self.registers[self.vx] & 0x0001
         self.registers[self.vx] >>= 1
 
     def _bsub_vy_vx(self):
-        LOG.info("_bsub_vy_vx")
+        LOG.info("_bsub_vy_vx") if INSTRUCTION_LOGGING else None 
         self.registers[0x000F] = 0 if self.registers[self.vx] > self.registers[self.vy] else 1  #   overflow, set borrow
         self.registers[self.vx] = self.registers[self.vy] - self.registers[self.vx]
         self.registers[self.vx] &= 0xff
 
     def _lshift_vx(self):
-        LOG.info("_lshift_vx")
+        #   8xyE
+        LOG.info("_lshift_vx") if INSTRUCTION_LOGGING else None 
         self.registers[0x000F] = (self.registers[self.vx] & 0x00F0) >> 7
-        self.registers[self.vx] = self.registers[self.vx] << 1
+        self.registers[self.vx] <<= 1
         self.registers[self.vx] &= 0x00FF
 
     def _skip_neq_vx_vy(self):
-        LOG.info("_skip_neq_vx_vy")
+        LOG.info("_skip_neq_vx_vy") if INSTRUCTION_LOGGING else None 
         if self.registers[self.vx] != self.registers[self.vy]:
             self.inc_pc()
 
     def _skip_vx_pressed(self):
-        LOG.info("_skip_vx_pressed")
+        LOG.info("_skip_vx_pressed") if INSTRUCTION_LOGGING else None 
+        LOG.info("checking keypress skip_vx_if_pressed") if CHECKING_KEYPRESS_LOGGING else None 
         key = self.registers[self.vx] & 0x000F
         if self.key_inputs[key] == 1:
             self.inc_pc()
 
     def _skip_not_vx_pressed(self):
-        LOG.info("_skip_not_vx_pressed")
+        LOG.info("_skip_not_vx_pressed") if INSTRUCTION_LOGGING else None 
+        LOG.info("checking keypress skip_vx_if_not_pressed") if CHECKING_KEYPRESS_LOGGING else None 
         key = self.registers[self.vx] & 0x000F
         if self.key_inputs[key] == 0:
             self.inc_pc()
 
     def _EZZZ(self):
-        LOG.info("_EZZZ")
+        LOG.info("_EZZZ") if INSTRUCTION_LOGGING else None 
         if self.op == 0xE00E:
             self._skip_vx_pressed()
         elif self.op == 0xE001:
             self._skip_not_vx_pressed()
 
     def _FZZZ(self):
-        LOG.info("_FZZZ")
+        LOG.info("_FZZZ") if INSTRUCTION_LOGGING else None 
         sub_op = (self.op & 0xF0FF)
         self.process(sub_op)
 
     def _wt_kp_ld_vx(self):
-        LOG.info("_wt_kp_ld_vx")
+        LOG.info("_wt_kp_ld_vx") if INSTRUCTION_LOGGING else None 
+        LOG.info("waiting keypress") if CHECKING_KEYPRESS_LOGGING else None 
         fpk = self.get_first_pressed_key()
         if fpk >= 0:
             self.registers[self.vx] = fpk
@@ -429,15 +446,15 @@ class Chip8Emulator:
             self.dec_pc()
 
     def _ld_delay_tmr_vx(self):
-        LOG.info("_ld_delay_tmr_vx")
+        LOG.info("_ld_delay_tmr_vx") if INSTRUCTION_LOGGING else None 
         self.delay_timer = self.registers[self.vx]
 
     def _ld_sound_tmr_vx(self):
-        LOG.info("_ld_sound_tmr_vx")
+        LOG.info("_ld_sound_tmr_vx") if INSTRUCTION_LOGGING else None 
         self.sound_timer = self.registers[self.vx]
 
     def _add_vx_i_wc(self):
-        LOG.info("_add_vx_i_wc")
+        LOG.info("_add_vx_i_wc") if INSTRUCTION_LOGGING else None 
         self.index += self.registers[self.vx]
         if self.index > 0x0FFF:
             self.registers[0x000F] = 1
@@ -446,30 +463,30 @@ class Chip8Emulator:
             self.registers[0x000F] = 0
 
     def _ld_i_vx_sprite_pos(self):
-        LOG.info("_ld_i_vx_sprite_pos")
+        LOG.info("_ld_i_vx_sprite_pos") if INSTRUCTION_LOGGING else None 
         selected_sprite_pos = 5*(self.registers[self.vx])
         self.index = selected_sprite_pos & 0x0FFF
 
     def _store_vx_decimal(self):
-        LOG.info("_store_vx_decimal")
+        LOG.info("_store_vx_decimal") if INSTRUCTION_LOGGING else None 
         self.memory[self.index]   = self.registers[self.vx] / 100
         self.memory[self.index+1] = (self.registers[self.vx] % 100) / 10
         self.memory[self.index+2] = self.registers[self.vx] % 10
 
     def _store_registers_0_to_vx(self):
-        LOG.info("_store_registers_0_to_vx")
+        LOG.info("_store_registers_0_to_vx") if INSTRUCTION_LOGGING else None 
         for i in range(self.vx+1):
             self.memory[self.index + i] = self.registers[i]
         self.index += self.vx + 1
 
     def _read_ld_registers_i_to_vx(self):
-        LOG.info("_read_ld_registers_i_to_vx")
+        LOG.info("_read_ld_registers_i_to_vx") if INSTRUCTION_LOGGING else None 
         for i in range(self.vx+1):
             self.registers[i] == self.memory[self.index + 1]
         self.index += self.vx + 1
 
     def _sprite(self):
-        LOG.info("_sprite")
+        LOG.info("_sprite") if INSTRUCTION_LOGGING else None 
         #   TODO: refactor
         self.registers[0x000F] = 0
         x = self.registers[self.vx] & 0x00FF
@@ -495,25 +512,25 @@ class Chip8Emulator:
         self.should_draw = True
 
     def _ldi(self):
-        LOG.info("_ldi")
+        LOG.info("_ldi") if INSTRUCTION_LOGGING else None 
         self.index = self.c3b
 
     def _jmi(self):
-        LOG.info("_jmi")
+        LOG.info("_jmi") if INSTRUCTION_LOGGING else None 
         self.pc = self.c3b + self.registers[0x0000]
 
     def _ld_vx_rand(self):
-        LOG.info("_ld_vx_rand")
+        LOG.info("_ld_vx_rand") if INSTRUCTION_LOGGING else None 
         r = int(random.random() * 0x00FF)
         self.registers[self.vx] = r & self.c2b
         self.registers[self.vx] &= 0xff
 
     def _EXIT(self):
-        LOG.info("_EXIT'ed")
+        LOG.info("_EXIT'ed") if INSTRUCTION_LOGGING else None 
         self.exited = True
 
     def _0ZZZ(self):
-        LOG.info("_0ZZZ")
+        LOG.info("_0ZZZ") if INSTRUCTION_LOGGING else None 
         if self.op == 0x00E0:
             self._disp_clear()
         elif self.op == 0x00EE:
@@ -521,28 +538,28 @@ class Chip8Emulator:
         elif self.op == 0x00FD:
             self._EXIT()
         else: # 0NNN
-            LOG.info("\t dispatch fell through, 0NNN hardware _call is outmoded operation")
+            LOG.info("\t dispatch fell through, 0NNN hardware _call is outmoded operation") if INSTRUCTION_LOGGING else None 
             # self._call()
         
     def _disp_clear(self):
-        LOG.info("_disp_clear")
+        LOG.info("_disp_clear") if INSTRUCTION_LOGGING else None 
         self.screen_buffer = [0]*Chip8Emulator.SCREEN_WIDTH*Chip8Emulator.SCREEN_HEIGHT
         self.should_draw = True
 
     def _return_from_sub(self):
-        LOG.info("_return_from_sub")
+        LOG.info("_return_from_sub") if INSTRUCTION_LOGGING else None 
         self.pc = self.stack.pop()
 
     def _call(self):
-        LOG.info("_call")
-        LOG.info(f"\tstoring current pc {fbhs(self.pc)} to stack")
+        LOG.info("_call") if INSTRUCTION_LOGGING else None 
+        LOG.info(f"\tstoring current pc {fbhs(self.pc)} to stack") if INSTRUCTION_LOGGING else None 
         self.stack.append(self.pc)
-        LOG.info(f"\tjumping to {fbhs(self.c3b)}")
+        LOG.info(f"\tjumping to {fbhs(self.c3b)}") if INSTRUCTION_LOGGING else None 
         self.pc = self.c3b
 
     def _jump(self):
-        LOG.info("_jump")
-        LOG.info(f"\tjumping to {fbhs(self.c3b)}")
+        LOG.info("_jump") if INSTRUCTION_LOGGING else None 
+        LOG.info(f"\tjumping to {fbhs(self.c3b)}") if INSTRUCTION_LOGGING else None 
         self.pc = self.c3b
 
 def main():
@@ -554,10 +571,11 @@ def main():
 
     emu = Chip8Emulator()
     emu.reset()
-    emu.load_rom("test.bin")
+    # emu.load_rom("test.bin")
     # emu.load_rom("./Maze (alt) [David Winter, 199x].ch8")
     # emu.load_rom("./Sierpinski [Sergey Naydenov, 2010].ch8")
     # emu.load_rom("./output.ch8")
+    emu.load_rom("./chip8-test-suite.ch8")
 
     dt = 1.0 / 60.0
     time = pygame.time.get_ticks()
@@ -578,8 +596,6 @@ def main():
                     if event.type in [pygame.KEYUP, pygame.KEYDOWN]:
                         emu.handle_input_event(event)
                     
-                # if event.type in [pygame.KEYDOWN, pygame.KEYUP]:
-                #     if event.type == pygame.KEYDOWN and event.key in [K_ESCAPE, K_q]:
         if running == False:
             break
 

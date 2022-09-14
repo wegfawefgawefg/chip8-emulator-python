@@ -53,16 +53,25 @@ ops = [
     0x8014, #   should set reg[0] to 1, reg[0xF] should be 1
 
     #   testing 0x8005
-    0x6000, #   put a FE in reg[0]
-    0x6101, #   put a 2 in reg[1]
-    0x8015, #   should set reg[0] to FF, reg[0xF] should be 1
+    0x6000, #   put a 0 in reg[0]
+    0x6101, #   put a 1 in reg[1]
+    0x8015, #   should set reg[0] to FF, reg[0xF] should be 0
+
+    #   testing 0x8006
+    0x6002, #   put a 2 in reg[0]
+    0x8006, #   should set reg[0] to FF, reg[0xF] should be 1
+
+    #   testing 0x8007
+    0x6002, #   put a 2 in reg[0]
+    0x6101, #   put a 1 in reg[1]
+    0x8017, #   should set reg[0] to FF, reg[0xF] should be 1
+
+    #   testing 0x8XYE
+    0x6002, #   put a 2 in reg[0]
+    0x6101, #   put a 1 in reg[1]
+    0x8017, #   should set reg[0] to FF, reg[0xF] should be 1
 
     0x00FD, #   terminate
-    # 0x8004,
-    # 0x8005,
-    # 0x8006,
-    # 0x8007,
-    # 0x8008,
     # 0x800F,
     # 0x9000,
     # 0xA000,
