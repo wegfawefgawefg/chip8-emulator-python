@@ -1,6 +1,8 @@
 # chip8-emulator-python
 CHIP-8 emulator project.
 
+![CHIP-8 emulator screenshot](image.png)
+
 ## Project Layout
 - `src/chip8_emulator/`: emulator source code
 - `assets/`: runtime assets (for example `tone.wav`)
