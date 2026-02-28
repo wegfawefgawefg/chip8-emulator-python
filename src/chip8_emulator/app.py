@@ -127,7 +127,9 @@ def run_emulator_app(
         sound_callback = None
 
     state = create_state(rom_path=rom_path)
-    draw_since_clear = False
+    front_buffer = state.screen_buffer.copy()
+    frame_in_progress_after_clear = False
+    has_draw_since_clear = False
 
     running = True
     while running and not state.exited:
@@ -158,8 +160,6 @@ def run_emulator_app(
         max_cycles_per_frame = max(1, cpu_hz // target_fps * 3)
 
         cycles_run = 0
-        saw_draw = False
-        frame_buffer_ready: list[int] | None = None
         while (
             accumulated_time >= cycle_interval
             and cycles_run < max_cycles_per_frame
@@ -167,15 +167,23 @@ def run_emulator_app(
         ):
             if state.pc <= (MEMORY_SIZE - 2):
                 next_opcode = (state.memory[state.pc] << 8) | state.memory[state.pc + 1]
-                if next_opcode == 0x00E0 and draw_since_clear:
-                    # Capture the finished frame before the next clear starts a new one.
-                    frame_buffer_ready = state.screen_buffer.copy()
-                    draw_since_clear = False
+                if next_opcode == 0x00E0 and has_draw_since_clear:
+                    front_buffer = state.screen_buffer.copy()
+                    has_draw_since_clear = False
 
+            pc_before = state.pc
             execute_cycle(state, quirks, sound_callback=None)
+            if state.op == 0x00E0:
+                frame_in_progress_after_clear = True
+                has_draw_since_clear = False
             if (state.op & 0xF000) == 0xD000:
-                saw_draw = True
-                draw_since_clear = True
+                if frame_in_progress_after_clear:
+                    has_draw_since_clear = True
+                else:
+                    front_buffer = state.screen_buffer.copy()
+            if (state.op & 0xF0FF) == 0xF00A and state.pc == pc_before and has_draw_since_clear:
+                front_buffer = state.screen_buffer.copy()
+                has_draw_since_clear = False
             accumulated_time -= cycle_interval
             cycles_run += 1
 
@@ -183,17 +191,13 @@ def run_emulator_app(
             tick_timers(state, sound_callback=sound_callback)
             timer_accumulated_time -= timer_interval
 
-        if frame_buffer_ready is not None or saw_draw:
-            primary_surface.fill((0, 0, 0))
-            if frame_buffer_ready is not None:
-                draw_screen_buffer(frame_buffer_ready, primary_surface)
-            else:
-                draw_screen_buffer(state.screen_buffer, primary_surface)
-            window.blit(
-                pygame.transform.scale(primary_surface, window.get_size()),
-                (0, 0),
-            )
-            pygame.display.flip()
+        primary_surface.fill((0, 0, 0))
+        draw_screen_buffer(front_buffer, primary_surface)
+        window.blit(
+            pygame.transform.scale(primary_surface, window.get_size()),
+            (0, 0),
+        )
+        pygame.display.flip()
 
     pygame.quit()
     return state

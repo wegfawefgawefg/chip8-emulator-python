@@ -208,10 +208,15 @@ check_food:
     LD V1, VD
 
     SNE V0, VB
-    JP set_delay
-    SNE V1, VC
+    JP check_food_y
     JP set_delay
 
+check_food_y:
+    SNE V1, VC
+    JP eat_food
+    JP set_delay
+
+eat_food:
     ; eat food: score++, grow up to max length 24
     ADD V5, V9
     LD VA, 24
