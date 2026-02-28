@@ -39,11 +39,19 @@ def execute_cycle(
 
     execute_opcode(state, opcode, quirks)
 
-    state.delay_timer = max(0, state.delay_timer - 1)
-    state.sound_timer = max(0, state.sound_timer - 1)
+    # Timers are stepped separately at 60 Hz from the runtime loop.
 
-    if state.sound_timer > 0 and sound_callback is not None:
-        sound_callback()
+
+def tick_timers(
+    state: EmulatorState,
+    sound_callback: Callable[[], None] | None = None,
+) -> None:
+    state.delay_timer = max(0, state.delay_timer - 1)
+
+    if state.sound_timer > 0:
+        state.sound_timer -= 1
+        if sound_callback is not None:
+            sound_callback()
 
 
 def execute_opcode(state: EmulatorState, opcode: int, quirks: Chip8Quirks) -> None:

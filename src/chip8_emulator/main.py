@@ -30,8 +30,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--hz",
         type=int,
-        default=240,
-        help="CPU cycles per second in windowed mode (default: 240)",
+        default=700,
+        help="CPU cycles per second in windowed mode (default: 700)",
     )
     parser.add_argument(
         "--fps",
@@ -74,6 +74,7 @@ def main() -> None:
             quirks=quirks,
             rom_path=rom_path,
             max_cycles=args.max_cycles,
+            cpu_hz=args.hz,
         )
         logging.getLogger(__name__).info(
             "headless finished: exited=%s pc=0x%03x",

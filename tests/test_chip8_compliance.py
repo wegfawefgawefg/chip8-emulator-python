@@ -4,7 +4,7 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from chip8_emulator.cpu import execute_opcode
+from chip8_emulator.cpu import execute_cycle, execute_opcode, tick_timers
 from chip8_emulator.quirks import MODERN_QUIRKS, ORIGINAL_QUIRKS
 from chip8_emulator.state import create_state
 
@@ -169,3 +169,34 @@ def test_dxyn_wraps_pixels_in_modern_profile():
     pixel_b = 0 + 31 * 64
     assert state.screen_buffer[pixel_a] == 1
     assert state.screen_buffer[pixel_b] == 1
+
+
+def test_execute_cycle_does_not_tick_timers():
+    state = create_state()
+    state.delay_timer = 5
+    state.sound_timer = 5
+    state.memory[state.pc] = 0x00
+    state.memory[state.pc + 1] = 0xE0
+
+    execute_cycle(state, ORIGINAL_QUIRKS, sound_callback=None)
+
+    assert state.delay_timer == 5
+    assert state.sound_timer == 5
+
+
+def test_tick_timers_decrements_sound_and_delay():
+    state = create_state()
+    state.delay_timer = 2
+    state.sound_timer = 2
+    beep_count = 0
+
+    def fake_beep() -> None:
+        nonlocal beep_count
+        beep_count += 1
+
+    tick_timers(state, sound_callback=fake_beep)
+    tick_timers(state, sound_callback=fake_beep)
+
+    assert state.delay_timer == 0
+    assert state.sound_timer == 0
+    assert beep_count == 2

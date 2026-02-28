@@ -26,7 +26,7 @@ uv run chip8
 
 Tune emulator speed (slower/faster):
 ```bash
-uv run chip8 --hz 180 --fps 60
+uv run chip8 --hz 700 --fps 60
 ```
 
 Run with a specific ROM:
@@ -58,7 +58,7 @@ uv run chip8 --rom roms/white_dot_wasd.ch8
 Assemble and run the included snake demo:
 ```bash
 uv run chip8-asm programs/snake.asm -o roms/snake.ch8
-uv run chip8 --rom roms/snake.ch8 --hz 180
+uv run chip8 --rom roms/snake.ch8 --hz 700
 ```
 
 Headless smoke test run:

@@ -1,16 +1,13 @@
 import os
 from pathlib import Path
 
-from .config import DEFAULT_ROM_PATH, DEFAULT_TONE_PATH, SCREEN_HEIGHT, SCREEN_WIDTH
-from .cpu import execute_cycle
+from .config import DEFAULT_ROM_PATH, DEFAULT_TONE_PATH, MEMORY_SIZE, SCREEN_HEIGHT, SCREEN_WIDTH
+from .cpu import execute_cycle, tick_timers
 from .quirks import Chip8Quirks
 from .state import EmulatorState, create_state, set_key_state
 
-def draw_screen(state: EmulatorState, surface: object) -> None:
-    if not state.should_draw:
-        return
-
-    for index, value in enumerate(state.screen_buffer):
+def draw_screen_buffer(screen_buffer: list[int], surface: object) -> None:
+    for index, value in enumerate(screen_buffer):
         if value == 0:
             continue
         x = index % SCREEN_WIDTH
@@ -39,16 +36,22 @@ def run_emulator_headless(
     quirks: Chip8Quirks,
     rom_path: str | Path = DEFAULT_ROM_PATH,
     max_cycles: int = 2000,
+    cpu_hz: int = 700,
 ) -> EmulatorState:
     if max_cycles <= 0:
         raise ValueError("max_cycles must be > 0")
+    if cpu_hz <= 0:
+        raise ValueError("cpu_hz must be > 0")
 
     state = create_state(rom_path=rom_path)
+    cycles_per_timer_tick = max(1, cpu_hz // 60)
 
-    for _ in range(max_cycles):
+    for i in range(max_cycles):
         if state.exited:
             break
         execute_cycle(state, quirks, sound_callback=None)
+        if ((i + 1) % cycles_per_timer_tick) == 0:
+            tick_timers(state, sound_callback=None)
 
     return state
 
@@ -57,7 +60,7 @@ def run_emulator_app(
     quirks: Chip8Quirks,
     rom_path: str | Path = DEFAULT_ROM_PATH,
     scale: int = 16,
-    cpu_hz: int = 240,
+    cpu_hz: int = 700,
     target_fps: int = 60,
 ) -> EmulatorState:
     if cpu_hz <= 0:
@@ -109,7 +112,9 @@ def run_emulator_app(
     pygame.init()
     clock = pygame.time.Clock()
     cycle_interval = 1.0 / float(cpu_hz)
+    timer_interval = 1.0 / 60.0
     accumulated_time = 0.0
+    timer_accumulated_time = 0.0
 
     primary_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
     window = pygame.display.set_mode((SCREEN_WIDTH * scale, SCREEN_HEIGHT * scale))
@@ -122,6 +127,7 @@ def run_emulator_app(
         sound_callback = None
 
     state = create_state(rom_path=rom_path)
+    draw_since_clear = False
 
     running = True
     while running and not state.exited:
@@ -148,22 +154,46 @@ def run_emulator_app(
 
         frame_dt = clock.tick(target_fps) / 1000.0
         accumulated_time += frame_dt
+        timer_accumulated_time += frame_dt
         max_cycles_per_frame = max(1, cpu_hz // target_fps * 3)
 
         cycles_run = 0
+        saw_draw = False
+        frame_buffer_ready: list[int] | None = None
         while (
             accumulated_time >= cycle_interval
             and cycles_run < max_cycles_per_frame
             and not state.exited
         ):
-            execute_cycle(state, quirks, sound_callback=sound_callback)
+            if state.pc <= (MEMORY_SIZE - 2):
+                next_opcode = (state.memory[state.pc] << 8) | state.memory[state.pc + 1]
+                if next_opcode == 0x00E0 and draw_since_clear:
+                    # Capture the finished frame before the next clear starts a new one.
+                    frame_buffer_ready = state.screen_buffer.copy()
+                    draw_since_clear = False
+
+            execute_cycle(state, quirks, sound_callback=None)
+            if (state.op & 0xF000) == 0xD000:
+                saw_draw = True
+                draw_since_clear = True
             accumulated_time -= cycle_interval
             cycles_run += 1
 
-        primary_surface.fill((0, 0, 0))
-        draw_screen(state, primary_surface)
-        window.blit(pygame.transform.scale(primary_surface, window.get_size()), (0, 0))
-        pygame.display.flip()
+        while timer_accumulated_time >= timer_interval and not state.exited:
+            tick_timers(state, sound_callback=sound_callback)
+            timer_accumulated_time -= timer_interval
+
+        if frame_buffer_ready is not None or saw_draw:
+            primary_surface.fill((0, 0, 0))
+            if frame_buffer_ready is not None:
+                draw_screen_buffer(frame_buffer_ready, primary_surface)
+            else:
+                draw_screen_buffer(state.screen_buffer, primary_surface)
+            window.blit(
+                pygame.transform.scale(primary_surface, window.get_size()),
+                (0, 0),
+            )
+            pygame.display.flip()
 
     pygame.quit()
     return state
