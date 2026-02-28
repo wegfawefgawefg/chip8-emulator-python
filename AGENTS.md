@@ -8,7 +8,7 @@
   - `quirks` for behavior profiles
   - `state` for emulator state + state helpers
   - `core` for opcode execution logic
-  - `runtime` for pygame/input/render loop
+  - `main` for pygame/input/render loop and app entrypoint
 - Keep opcode logic and CPU behavior separate from UI/render code.
 
 ## Style

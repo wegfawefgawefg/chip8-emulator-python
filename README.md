@@ -14,8 +14,7 @@ CHIP-8 emulator project.
 - `quirks.py`: quirk profiles and profile loading
 - `state.py`: emulator state + memory/input helpers
 - `core.py`: opcode decode/execute and CPU cycle logic
-- `runtime.py`: pygame input, rendering, and app loop
-- `main.py`: CLI entrypoint
+- `main.py`: pygame input/render loop and CLI entrypoint
 
 ## UV Setup
 ```bash
