@@ -12,6 +12,7 @@ TODO:
 """
 
 from cmath import inf
+from dataclasses import dataclass
 import os
 from pathlib import Path
 import random
@@ -60,12 +61,50 @@ ROMS_DIR = PROJECT_ROOT / "roms"
 DUMPS_DIR = PROJECT_ROOT / "dumps"
 
 
+@dataclass(frozen=True)
+class Chip8Quirks:
+    shift_uses_vy: bool
+    load_store_increment_i: bool
+    jump_with_vx: bool
+    draw_wrap: bool
+
+
+ORIGINAL_QUIRKS = Chip8Quirks(
+    shift_uses_vy=True,
+    load_store_increment_i=True,
+    jump_with_vx=False,
+    draw_wrap=False,
+)
+
+MODERN_QUIRKS = Chip8Quirks(
+    shift_uses_vy=False,
+    load_store_increment_i=False,
+    jump_with_vx=True,
+    draw_wrap=True,
+)
+
+QUIRKS_BY_PROFILE = {
+    "original": ORIGINAL_QUIRKS,
+    "modern": MODERN_QUIRKS,
+}
+
+
+def load_quirks_profile_from_env() -> tuple[str, Chip8Quirks]:
+    profile = os.getenv("CHIP8_QUIRKS", "original").strip().lower()
+    quirks = QUIRKS_BY_PROFILE.get(profile)
+    if quirks is None:
+        accepted = ", ".join(sorted(QUIRKS_BY_PROFILE.keys()))
+        raise ValueError(f"invalid CHIP8_QUIRKS '{profile}', expected one of: {accepted}")
+    return profile, quirks
+
+
 class Chip8Emulator:
     MEMORY_SIZE = 4096
     SCREEN_WIDTH = 64
     SCREEN_HEIGHT = 32
 
-    def __init__(self):
+    def __init__(self, quirks: Chip8Quirks | None = None):
+        self.quirks = quirks or ORIGINAL_QUIRKS
         self.print_loaded_ops = True
 
         self.tone = pygame.mixer.Sound(str(ASSETS_DIR / "tone.wav"))
@@ -238,9 +277,8 @@ class Chip8Emulator:
     def process(self, op):
         try:
             self.isa[op]()
-        except:
-            LOG.error(f"invalid instruction: 0x{op:02x}")
-            quit()
+        except KeyError as exc:
+            raise ValueError(f"invalid instruction: 0x{self.op:04x}") from exc
 
     def inc_pc(self):
         self.pc += 2
@@ -300,11 +338,11 @@ class Chip8Emulator:
         LOG.info(
             "========================= cycle ================================"
         ) if CYCLE_LOGGING else None
-        if self.pc >= Chip8Emulator.MEMORY_SIZE:
+        if self.pc > (Chip8Emulator.MEMORY_SIZE - 2):
             LOG.error(
                 "program counter exceeded program memory"
             ) if CYCLE_LOGGING else None
-            quit()
+            raise RuntimeError("program counter exceeded program memory")
 
         self.op = (self.memory[self.pc] << 8) | self.memory[self.pc + 1]
         self.inc_pc()
@@ -360,7 +398,6 @@ class Chip8Emulator:
         LOG.info("define_isa")
         self.isa = {
             0x0000: self._0ZZZ,
-            0x00FD: self._EXIT,
             0x1000: self._jump,
             0x2000: self._call,
             0x3000: self._skip_eq_vx_nn,
@@ -368,32 +405,14 @@ class Chip8Emulator:
             0x5000: self._skip_eq_vx_vy,
             0x6000: self._ld_vx_nn,
             0x7000: self._ld_add_vx_nn,
-            0x8000: self._8ZZZ,  #   8 - dispatch
-            0x8001: self._ld_vx_vy,  #   actualy 0x8000
-            0x8002: self._ldor_vx_vy,  #   actualy 0x8001
-            0x8003: self._ldand_vx_vy,  #   actualy 0x8002
-            0x8004: self._ldxor_vx_vy,  #   actualy 0x8003
-            0x8005: self._ldcadd_vx_vy,  #   actualy 0x8004
-            0x8006: self._bsub_vx_vy,  #   actualy 0x8005
-            0x8007: self._rshift_vx,  #   actualy 0x8006
-            0x8008: self._bsub_vy_vx,  #   actualy 0x8007
-            0x800F: self._lshift_vx,  #   actualy 0x800E
+            0x8000: self._8ZZZ,  # 8 - dispatch
             0x9000: self._skip_neq_vx_vy,
             0xA000: self._ldi,
             0xB000: self._jmi,
             0xC000: self._ld_vx_rand,
             0xD000: self._sprite,
             0xE000: self._EZZZ,
-            0xF000: self._FZZZ,  #   F - dispatch
-            0xF007: self._ld_vx_delay_tmr,
-            0xF00A: self._wt_kp_ld_vx,
-            0xF015: self._ld_delay_tmr_vx,
-            0xF018: self._ld_sound_tmr_vx,
-            0xF01E: self._add_vx_i_wc,
-            0xF029: self._ld_i_vx_sprite_pos,
-            0xF033: self._store_vx_decimal,
-            0xF055: self._store_registers_0_to_vx,
-            0xF065: self._read_ld_registers_i_to_vx,
+            0xF000: self._FZZZ,  # F - dispatch
         }
 
     def _ld_vx_delay_tmr(self):
@@ -415,6 +434,8 @@ class Chip8Emulator:
 
     def _skip_eq_vx_vy(self):
         LOG.info("_skip_eq_vx_vy") if INSTRUCTION_LOGGING else None
+        if self.c1b != 0:
+            raise ValueError(f"invalid opcode 0x{self.op:04x} for 5XY0")
         if self.registers[self.vx] == self.registers[self.vy]:
             self.inc_pc()
 
@@ -428,11 +449,31 @@ class Chip8Emulator:
     def _ld_add_vx_nn(self):
         LOG.info("_ld_add_vx_nn") if INSTRUCTION_LOGGING else None
         self.registers[self.vx] += self.c2b
+        self.registers[self.vx] &= 0x00FF
 
     def _8ZZZ(self):
         LOG.info("_8ZZZ") if INSTRUCTION_LOGGING else None
-        sub_op = (self.op & 0xF00F) + 0x001
-        self.process(sub_op)
+        op = self.c1b
+        if op == 0x0:
+            self._ld_vx_vy()
+        elif op == 0x1:
+            self._ldor_vx_vy()
+        elif op == 0x2:
+            self._ldand_vx_vy()
+        elif op == 0x3:
+            self._ldxor_vx_vy()
+        elif op == 0x4:
+            self._ldcadd_vx_vy()
+        elif op == 0x5:
+            self._bsub_vx_vy()
+        elif op == 0x6:
+            self._rshift_vx()
+        elif op == 0x7:
+            self._bsub_vy_vx()
+        elif op == 0xE:
+            self._lshift_vx()
+        else:
+            raise ValueError(f"invalid opcode 0x{self.op:04x} for 8XY*")
 
     def _ld_vx_vy(self):
         LOG.info("_ld_vx_vy") if INSTRUCTION_LOGGING else None
@@ -471,8 +512,10 @@ class Chip8Emulator:
 
     def _rshift_vx(self):
         LOG.info("_rshift_vx") if INSTRUCTION_LOGGING else None
-        self.registers[0x000F] = self.registers[self.vx] & 0x0001
-        self.registers[self.vx] >>= 1
+        source_register = self.vy if self.quirks.shift_uses_vy else self.vx
+        src = self.registers[source_register]
+        self.registers[0x000F] = src & 0x0001
+        self.registers[self.vx] = (src >> 1) & 0x00FF
 
     def _bsub_vy_vx(self):
         LOG.info("_bsub_vy_vx") if INSTRUCTION_LOGGING else None
@@ -485,12 +528,15 @@ class Chip8Emulator:
     def _lshift_vx(self):
         #   8xyE
         LOG.info("_lshift_vx") if INSTRUCTION_LOGGING else None
-        self.registers[0x000F] = (self.registers[self.vx] & 0x00F0) >> 7
-        self.registers[self.vx] <<= 1
-        self.registers[self.vx] &= 0x00FF
+        source_register = self.vy if self.quirks.shift_uses_vy else self.vx
+        src = self.registers[source_register]
+        self.registers[0x000F] = (src & 0x0080) >> 7
+        self.registers[self.vx] = (src << 1) & 0x00FF
 
     def _skip_neq_vx_vy(self):
         LOG.info("_skip_neq_vx_vy") if INSTRUCTION_LOGGING else None
+        if self.c1b != 0:
+            raise ValueError(f"invalid opcode 0x{self.op:04x} for 9XY0")
         if self.registers[self.vx] != self.registers[self.vy]:
             self.inc_pc()
 
@@ -514,15 +560,37 @@ class Chip8Emulator:
 
     def _EZZZ(self):
         LOG.info("_EZZZ") if INSTRUCTION_LOGGING else None
-        if self.op == 0xE00E:
+        op = self.op & 0x00FF
+        if op == 0x9E:
             self._skip_vx_pressed()
-        elif self.op == 0xE001:
+        elif op == 0xA1:
             self._skip_not_vx_pressed()
+        else:
+            raise ValueError(f"invalid opcode 0x{self.op:04x} for EX**")
 
     def _FZZZ(self):
         LOG.info("_FZZZ") if INSTRUCTION_LOGGING else None
         sub_op = self.op & 0xF0FF
-        self.process(sub_op)
+        if sub_op == 0xF007:
+            self._ld_vx_delay_tmr()
+        elif sub_op == 0xF00A:
+            self._wt_kp_ld_vx()
+        elif sub_op == 0xF015:
+            self._ld_delay_tmr_vx()
+        elif sub_op == 0xF018:
+            self._ld_sound_tmr_vx()
+        elif sub_op == 0xF01E:
+            self._add_vx_i_wc()
+        elif sub_op == 0xF029:
+            self._ld_i_vx_sprite_pos()
+        elif sub_op == 0xF033:
+            self._store_vx_decimal()
+        elif sub_op == 0xF055:
+            self._store_registers_0_to_vx()
+        elif sub_op == 0xF065:
+            self._read_ld_registers_i_to_vx()
+        else:
+            raise ValueError(f"invalid opcode 0x{self.op:04x} for FX**")
 
     def _wt_kp_ld_vx(self):
         LOG.info("_wt_kp_ld_vx") if INSTRUCTION_LOGGING else None
@@ -543,60 +611,63 @@ class Chip8Emulator:
 
     def _add_vx_i_wc(self):
         LOG.info("_add_vx_i_wc") if INSTRUCTION_LOGGING else None
-        self.index += self.registers[self.vx]
-        if self.index > 0x0FFF:
-            self.registers[0x000F] = 1
-            self.index &= 0x0FFF
-        else:
-            self.registers[0x000F] = 0
+        self.index = (self.index + self.registers[self.vx]) & 0x0FFF
 
     def _ld_i_vx_sprite_pos(self):
         LOG.info("_ld_i_vx_sprite_pos") if INSTRUCTION_LOGGING else None
-        selected_sprite_pos = 5 * (self.registers[self.vx])
+        selected_sprite_pos = 5 * (self.registers[self.vx] & 0x000F)
         self.index = selected_sprite_pos & 0x0FFF
 
     def _store_vx_decimal(self):
         LOG.info("_store_vx_decimal") if INSTRUCTION_LOGGING else None
-        self.memory[self.index] = self.registers[self.vx] / 100
-        self.memory[self.index + 1] = (self.registers[self.vx] % 100) / 10
-        self.memory[self.index + 2] = self.registers[self.vx] % 10
+        value = self.registers[self.vx]
+        self.memory[self.index] = value // 100
+        self.memory[self.index + 1] = (value % 100) // 10
+        self.memory[self.index + 2] = value % 10
 
     def _store_registers_0_to_vx(self):
         LOG.info("_store_registers_0_to_vx") if INSTRUCTION_LOGGING else None
         for i in range(self.vx + 1):
             self.memory[self.index + i] = self.registers[i]
-        self.index += self.vx + 1
+        if self.quirks.load_store_increment_i:
+            self.index = (self.index + self.vx + 1) & 0x0FFF
 
     def _read_ld_registers_i_to_vx(self):
         LOG.info("_read_ld_registers_i_to_vx") if INSTRUCTION_LOGGING else None
         for i in range(self.vx + 1):
-            self.registers[i] == self.memory[self.index + 1]
-        self.index += self.vx + 1
+            self.registers[i] = self.memory[self.index + i]
+        if self.quirks.load_store_increment_i:
+            self.index = (self.index + self.vx + 1) & 0x0FFF
 
     def _sprite(self):
         LOG.info("_sprite") if INSTRUCTION_LOGGING else None
-        #   TODO: refactor
         self.registers[0x000F] = 0
-        x = self.registers[self.vx] & 0x00FF
-        y = self.registers[self.vy] & 0x00FF
+        x = (self.registers[self.vx] & 0x00FF) % Chip8Emulator.SCREEN_WIDTH
+        y = (self.registers[self.vy] & 0x00FF) % Chip8Emulator.SCREEN_HEIGHT
         height = self.op & 0x000F
-        row = 0
-        while row < height:
-            curr_row = self.memory[row + self.index]
-            pixel_offset = 0
-            while pixel_offset < 8:
-                loc = x + pixel_offset + ((y + row) * 64)
-                pixel_offset += 1
-                if (y + row) >= 32 or (x + pixel_offset - 1) >= 64:
+        for row in range(height):
+            y_pos = y + row
+            if self.quirks.draw_wrap:
+                y_pos %= Chip8Emulator.SCREEN_HEIGHT
+            elif y_pos >= Chip8Emulator.SCREEN_HEIGHT:
+                break
+
+            sprite_row = self.memory[self.index + row]
+            for pixel_offset in range(8):
+                x_pos = x + pixel_offset
+                if self.quirks.draw_wrap:
+                    x_pos %= Chip8Emulator.SCREEN_WIDTH
+                elif x_pos >= Chip8Emulator.SCREEN_WIDTH:
+                    break
+
+                curr_pixel = (sprite_row >> (7 - pixel_offset)) & 0x1
+                if curr_pixel == 0:
                     continue
-                mask = 1 << 8 - pixel_offset
-                curr_pixel = (curr_row & mask) >> (8 - pixel_offset)
-                self.screen_buffer[loc] ^= curr_pixel
-                if self.screen_buffer[loc] == 0:
+
+                loc = x_pos + (y_pos * Chip8Emulator.SCREEN_WIDTH)
+                if self.screen_buffer[loc] == 1:
                     self.registers[0xF] = 1
-                else:
-                    self.registers[0xF] = 0
-            row += 1
+                self.screen_buffer[loc] ^= 1
         self.should_draw = True
 
     def _ldi(self):
@@ -605,11 +676,12 @@ class Chip8Emulator:
 
     def _jmi(self):
         LOG.info("_jmi") if INSTRUCTION_LOGGING else None
-        self.pc = self.c3b + self.registers[0x0000]
+        jump_register = self.vx if self.quirks.jump_with_vx else 0x0
+        self.pc = (self.c3b + self.registers[jump_register]) & 0x0FFF
 
     def _ld_vx_rand(self):
         LOG.info("_ld_vx_rand") if INSTRUCTION_LOGGING else None
-        r = int(random.random() * 0x00FF)
+        r = random.randint(0, 0x00FF)
         self.registers[self.vx] = r & self.c2b
         self.registers[self.vx] &= 0xFF
 
@@ -664,7 +736,9 @@ def main():
     primary_surface = pygame.Surface(screen_dims)
     window = pygame.display.set_mode(window_dims)
 
-    emu = Chip8Emulator()
+    quirks_profile, quirks = load_quirks_profile_from_env()
+    LOG.info(f"quirks profile: {quirks_profile}")
+    emu = Chip8Emulator(quirks=quirks)
     emu.reset()
     # emu.load_rom(str(ROMS_DIR / "test.bin"))
     # emu.load_rom(str(ROMS_DIR / "Maze (alt) [David Winter, 199x].ch8"))
