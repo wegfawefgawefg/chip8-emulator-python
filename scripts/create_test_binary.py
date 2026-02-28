@@ -94,7 +94,7 @@ ops = [
 ]
 
 project_root = Path(__file__).resolve().parents[1]
-fname = project_root / "bins" / "test.bin"
+fname = project_root / "roms" / "test.bin"
 with open(fname, "wb") as f:
     for op in ops:
         p1 = (op & 0xFF00) >> 8

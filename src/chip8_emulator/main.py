@@ -55,7 +55,9 @@ def fbhs(h):
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-BINS_DIR = PROJECT_ROOT / "bins"
+ASSETS_DIR = PROJECT_ROOT / "assets"
+ROMS_DIR = PROJECT_ROOT / "roms"
+DUMPS_DIR = PROJECT_ROOT / "dumps"
 
 
 class Chip8Emulator:
@@ -66,7 +68,7 @@ class Chip8Emulator:
     def __init__(self):
         self.print_loaded_ops = True
 
-        self.tone = pygame.mixer.Sound(str(BINS_DIR / "tone.wav"))
+        self.tone = pygame.mixer.Sound(str(ASSETS_DIR / "tone.wav"))
         self.current_rom_path = None
         self.reset()
         self.define_isa()
@@ -195,7 +197,7 @@ class Chip8Emulator:
             self.load_rom(self.current_rom_path)
 
     def dump_mem(self):
-        fname = BINS_DIR / "memory_dump.bin"
+        fname = DUMPS_DIR / "memory_dump.bin"
         with open(fname, "wb") as f:
             for byte in self.memory:
                 f.write(bytes([byte]))
@@ -664,11 +666,11 @@ def main():
 
     emu = Chip8Emulator()
     emu.reset()
-    # emu.load_rom("test.bin")
-    # emu.load_rom("./Maze (alt) [David Winter, 199x].ch8")
-    # emu.load_rom("./Sierpinski [Sergey Naydenov, 2010].ch8")
-    # emu.load_rom("./output.ch8")
-    emu.load_rom(str(BINS_DIR / "chip8-test-suite.ch8"))
+    # emu.load_rom(str(ROMS_DIR / "test.bin"))
+    # emu.load_rom(str(ROMS_DIR / "Maze (alt) [David Winter, 199x].ch8"))
+    # emu.load_rom(str(ROMS_DIR / "Sierpinski [Sergey Naydenov, 2010].ch8"))
+    # emu.load_rom(str(ROMS_DIR / "output.ch8"))
+    emu.load_rom(str(ROMS_DIR / "chip8-test-suite.ch8"))
 
     dt = 1.0 / 60.0
     time = pygame.time.get_ticks()

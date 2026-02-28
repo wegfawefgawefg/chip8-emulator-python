@@ -3,7 +3,9 @@ CHIP-8 emulator project.
 
 ## Project Layout
 - `src/chip8_emulator/`: emulator source code
-- `bins/`: ROMs, generated binaries, and audio assets
+- `assets/`: runtime assets (for example `tone.wav`)
+- `roms/`: CHIP-8 ROMs and generated test ROM binaries
+- `dumps/`: emulator memory dumps and debug output files
 - `scripts/`: helper scripts
 - `tests/`: test suite scaffold
 
