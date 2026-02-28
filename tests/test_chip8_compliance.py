@@ -4,7 +4,7 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from chip8_emulator.core import execute_opcode
+from chip8_emulator.cpu import execute_opcode
 from chip8_emulator.quirks import MODERN_QUIRKS, ORIGINAL_QUIRKS
 from chip8_emulator.state import create_state
 

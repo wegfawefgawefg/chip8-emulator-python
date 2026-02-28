@@ -13,8 +13,9 @@ CHIP-8 emulator project.
 - `config.py`: constants and filesystem paths
 - `quirks.py`: quirk profiles and profile loading
 - `state.py`: emulator state + memory/input helpers
-- `core.py`: opcode decode/execute and CPU cycle logic
-- `main.py`: pygame input/render loop and CLI entrypoint
+- `cpu.py`: opcode decode/execute and CPU cycle logic
+- `app.py`: pygame input handling, rendering, and app loop
+- `main.py`: CLI entrypoint
 
 ## UV Setup
 ```bash
@@ -22,9 +23,14 @@ uv sync
 uv run chip8
 ```
 
+Run with a specific ROM:
+```bash
+uv run chip8 --rom "roms/Sierpinski [Sergey Naydenov, 2010].ch8"
+```
+
 Run with modern quirk profile:
 ```bash
-CHIP8_QUIRKS=modern uv run chip8
+uv run chip8 --quirks modern
 ```
 
 Generate the local opcode test binary:
