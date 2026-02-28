@@ -1,3 +1,5 @@
+from pathlib import Path
+
 ops = [
     0x0000,
     0x1204, #   jump to 0x204 in memory, which means next op
@@ -91,7 +93,8 @@ ops = [
     # 0xF065,
 ]
 
-fname = "test.bin"
+project_root = Path(__file__).resolve().parents[1]
+fname = project_root / "bins" / "test.bin"
 with open(fname, "wb") as f:
     for op in ops:
         p1 = (op & 0xFF00) >> 8
