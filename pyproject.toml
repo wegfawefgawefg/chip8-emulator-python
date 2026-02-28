@@ -14,6 +14,7 @@ dependencies = [
 
 [project.scripts]
 chip8 = "chip8_emulator.main:main"
+chip8-asm = "assembler.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

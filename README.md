@@ -5,6 +5,7 @@ CHIP-8 emulator project.
 - `src/chip8_emulator/`: emulator source code
 - `assets/`: runtime assets (for example `tone.wav`)
 - `roms/`: CHIP-8 ROMs and generated test ROM binaries
+- `programs/`: assembly source programs (`.asm`)
 - `dumps/`: emulator memory dumps and debug output files
 - `scripts/`: helper scripts
 - `tests/`: test suite scaffold
@@ -23,6 +24,11 @@ uv sync
 uv run chip8
 ```
 
+Tune emulator speed (slower/faster):
+```bash
+uv run chip8 --hz 180 --fps 60
+```
+
 Run with a specific ROM:
 ```bash
 uv run chip8 --rom "roms/Sierpinski [Sergey Naydenov, 2010].ch8"
@@ -36,6 +42,28 @@ uv run chip8 --quirks modern
 Generate the local opcode test binary:
 ```bash
 uv run python scripts/create_test_binary.py
+```
+
+Assemble a ROM from source:
+```bash
+uv run chip8-asm path/to/program.asm -o roms/program.ch8
+```
+
+Assemble and run the included WASD dot demo:
+```bash
+uv run chip8-asm programs/white_dot_wasd.asm -o roms/white_dot_wasd.ch8
+uv run chip8 --rom roms/white_dot_wasd.ch8
+```
+
+Assemble and run the included snake demo:
+```bash
+uv run chip8-asm programs/snake.asm -o roms/snake.ch8
+uv run chip8 --rom roms/snake.ch8 --hz 180
+```
+
+Headless smoke test run:
+```bash
+uv run chip8 --headless --max-cycles 500 --rom roms/white_dot_wasd.ch8
 ```
 
 ## CHIP-8 Compliance Target

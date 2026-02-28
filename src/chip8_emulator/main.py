@@ -3,6 +3,7 @@ import argparse
 import os
 from pathlib import Path
 
+from .app import run_emulator_app, run_emulator_headless
 from .config import DEFAULT_ROM_PATH
 from .quirks import Chip8Quirks, QUIRKS_BY_PROFILE, load_quirks_profile
 
@@ -26,6 +27,29 @@ def parse_args() -> argparse.Namespace:
         default=16,
         help="Window scaling factor (default: 16)",
     )
+    parser.add_argument(
+        "--hz",
+        type=int,
+        default=240,
+        help="CPU cycles per second in windowed mode (default: 240)",
+    )
+    parser.add_argument(
+        "--fps",
+        type=int,
+        default=60,
+        help="Render frames per second in windowed mode (default: 60)",
+    )
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="Run without pygame window (useful for smoke tests)",
+    )
+    parser.add_argument(
+        "--max-cycles",
+        type=int,
+        default=2000,
+        help="Max cycles in headless mode (default: 2000)",
+    )
     return parser.parse_args()
 
 
@@ -38,14 +62,33 @@ def resolve_quirks_profile(cli_quirks: str | None) -> tuple[str, Chip8Quirks]:
 
 def main() -> None:
     args = parse_args()
-    from .app import run_emulator_app
 
     logging.basicConfig(level=logging.INFO)
     profile, quirks = resolve_quirks_profile(args.quirks)
     rom_path = Path(args.rom)
     logging.getLogger(__name__).info("quirks profile: %s", profile)
     logging.getLogger(__name__).info("rom: %s", rom_path)
-    run_emulator_app(quirks=quirks, rom_path=rom_path, scale=args.scale)
+
+    if args.headless:
+        state = run_emulator_headless(
+            quirks=quirks,
+            rom_path=rom_path,
+            max_cycles=args.max_cycles,
+        )
+        logging.getLogger(__name__).info(
+            "headless finished: exited=%s pc=0x%03x",
+            state.exited,
+            state.pc,
+        )
+        return
+
+    run_emulator_app(
+        quirks=quirks,
+        rom_path=rom_path,
+        scale=args.scale,
+        cpu_hz=args.hz,
+        target_fps=args.fps,
+    )
 
 
 if __name__ == "__main__":
