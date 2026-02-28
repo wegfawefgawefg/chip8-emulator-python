@@ -1,1 +1,1 @@
-"""CHIP-8 emulator package."""
+"""chip8_emulator package."""
